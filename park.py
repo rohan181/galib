@@ -1,12 +1,13 @@
 """
 park.py
-Park and terrain management for Adventure World simulation.
+Enhanced Park with improved visualization for Adventure World.
 """
 
 import random
 import matplotlib.patches as patches
 from patron import Patron
 from config import DEFAULT_PARK_WIDTH, DEFAULT_PARK_HEIGHT, COLOR_ENTRANCE, COLOR_EXIT
+from config import COLOR_OBSTACLE, COLOR_BOUNDARY
 
 
 class TerrainObject:
@@ -43,17 +44,29 @@ class TerrainObject:
         return box[0] <= x <= box[2] and box[1] <= y <= box[3]
     
     def plot(self, ax):
-        """Plot the terrain object."""
+        """Plot the terrain object with enhanced visuals."""
         box = self.get_bounding_box()
-        color = 'gray' if self.type == "obstacle" else 'lightgreen'
-        rect = patches.Rectangle((box[0], box[1]), self.width, self.height,
-                                 linewidth=1, edgecolor='black', 
-                                 facecolor=color, alpha=0.5)
-        ax.add_patch(rect)
+        
+        if self.type == "obstacle":
+            # Obstacles as rocks/trees
+            rect = patches.Rectangle((box[0], box[1]), self.width, self.height,
+                                     linewidth=2, edgecolor='darkgreen', 
+                                     facecolor='forestgreen', alpha=0.6)
+            ax.add_patch(rect)
+            # Add texture with circles
+            ax.plot(self.x, self.y, 'o', color='darkgreen', markersize=8)
+            
+        elif self.type == "boundary":
+            # Boundaries as walls
+            rect = patches.Rectangle((box[0], box[1]), self.width, self.height,
+                                     linewidth=3, edgecolor='black', 
+                                     facecolor=COLOR_BOUNDARY, alpha=0.7,
+                                     linestyle='-')
+            ax.add_patch(rect)
 
 
 class Park:
-    """Manages the theme park environment."""
+    """Manages the theme park environment with enhanced visualization."""
     
     def __init__(self, width=DEFAULT_PARK_WIDTH, height=DEFAULT_PARK_HEIGHT):
         """
@@ -75,12 +88,16 @@ class Park:
     
     def _add_boundaries(self):
         """Add boundary walls around the park."""
+        # Top wall
         self.terrain_objects.append(TerrainObject(self.width/2, self.height - 1, 
                                                   self.width, 2, "boundary"))
+        # Bottom wall
         self.terrain_objects.append(TerrainObject(self.width/2, 1, 
                                                   self.width, 2, "boundary"))
+        # Left wall
         self.terrain_objects.append(TerrainObject(1, self.height/2, 
                                                   2, self.height, "boundary"))
+        # Right wall
         self.terrain_objects.append(TerrainObject(self.width - 1, self.height/2, 
                                                   2, self.height, "boundary"))
     
@@ -157,33 +174,57 @@ class Park:
     
     def plot(self, ax):
         """
-        Plot the entire park.
+        Plot the entire park with enhanced visuals.
         
         Parameters:
             ax: Matplotlib axes object
         """
         ax.clear()
-        ax.set_xlim(0, self.width)
-        ax.set_ylim(0, self.height)
+        ax.set_xlim(-2, self.width + 2)
+        ax.set_ylim(-2, self.height + 2)
         ax.set_aspect('equal')
-        ax.set_title('Adventure World Theme Park')
-        ax.set_xlabel('X Position')
-        ax.set_ylabel('Y Position')
+        ax.set_facecolor('#f0f8f0')  # Light green background for park
         
+        # Draw grass pattern (optional decorative element)
+        for i in range(0, int(self.width), 10):
+            for j in range(0, int(self.height), 10):
+                ax.plot(i, j, '.', color='lightgreen', markersize=2, alpha=0.3)
+        
+        # Plot terrain objects (boundaries and obstacles)
         for obj in self.terrain_objects:
             obj.plot(ax)
         
-        for entrance in self.entrances:
-            ax.plot(entrance[0], entrance[1], COLOR_ENTRANCE, markersize=12, label='Entrance')
-        for exit_point in self.exits:
-            ax.plot(exit_point[0], exit_point[1], COLOR_EXIT, markersize=12, label='Exit')
+        # Plot entrances with enhanced markers
+        for i, entrance in enumerate(self.entrances):
+            ax.plot(entrance[0], entrance[1], COLOR_ENTRANCE, markersize=15, 
+                   label='Entrance' if i == 0 else '', zorder=10)
+            # Add entrance label
+            ax.text(entrance[0], entrance[1] + 2, 'ENTRANCE', ha='center',
+                   fontsize=8, weight='bold', 
+                   bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.8))
         
+        # Plot exits with enhanced markers
+        for i, exit_point in enumerate(self.exits):
+            ax.plot(exit_point[0], exit_point[1], COLOR_EXIT, markersize=15,
+                   label='Exit' if i == 0 else '', zorder=10)
+            # Add exit label
+            ax.text(exit_point[0], exit_point[1] - 2, 'EXIT', ha='center',
+                   fontsize=8, weight='bold',
+                   bbox=dict(boxstyle='round', facecolor='lightcoral', alpha=0.8))
+        
+        # Plot all rides
         for ride in self.rides:
             ride.plot(ax)
         
+        # Plot all patrons
         for patron in self.patrons:
             patron.plot(ax)
         
+        # Add grid for reference
+        ax.grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
+        
+        # Create legend with unique labels only
         handles, labels = ax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        ax.legend(by_label.values(), by_label.keys(), loc='upper right', fontsize=8)
+        ax.legend(by_label.values(), by_label.keys(), 
+                 loc='upper right', fontsize=9, framealpha=0.9)

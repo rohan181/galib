@@ -1,6 +1,6 @@
 """
 rides.py
-Ride classes for Adventure World theme park simulation.
+Enhanced Ride classes with improved visualization for Adventure World.
 """
 
 import math
@@ -13,22 +13,10 @@ from config import RideState, PatronState, DEFAULT_LOADING_TIME, DEFAULT_UNLOAD_
 class Ride(ABC):
     """
     Abstract base class for all theme park rides.
-    Defines common attributes and methods that all rides must implement.
     """
     
     def __init__(self, name, x, y, width, height, capacity, duration):
-        """
-        Initialize a ride.
-        
-        Parameters:
-            name (str): Name of the ride
-            x (float): X-coordinate of ride center
-            y (float): Y-coordinate of ride center
-            width (float): Width of ride bounding box
-            height (float): Height of ride bounding box
-            capacity (int): Maximum number of patrons per cycle
-            duration (int): Duration of ride in timesteps
-        """
+        """Initialize a ride."""
         self.name = name
         self.x = x
         self.y = y
@@ -44,13 +32,12 @@ class Ride(ABC):
         self.loading_time = DEFAULT_LOADING_TIME
         self.unload_time = DEFAULT_UNLOAD_TIME
         
-    def get_bounding_box(self):
-        """
-        Get the bounding box of the ride.
+        # Statistics
+        self.total_riders_served = 0
+        self.total_cycles = 0
         
-        Returns:
-            tuple: (x_min, y_min, x_max, y_max)
-        """
+    def get_bounding_box(self):
+        """Get the bounding box of the ride."""
         x_min = self.x - self.width / 2
         y_min = self.y - self.height / 2
         x_max = self.x + self.width / 2
@@ -58,15 +45,7 @@ class Ride(ABC):
         return (x_min, y_min, x_max, y_max)
     
     def overlaps_with(self, other_ride):
-        """
-        Check if this ride overlaps with another ride.
-        
-        Parameters:
-            other_ride (Ride): Another ride to check against
-            
-        Returns:
-            bool: True if rides overlap, False otherwise
-        """
+        """Check if this ride overlaps with another ride."""
         box1 = self.get_bounding_box()
         box2 = other_ride.get_bounding_box()
         
@@ -74,33 +53,55 @@ class Ride(ABC):
                    box1[3] < box2[1] or box1[1] > box2[3])
     
     def add_to_queue(self, patron):
-        """
-        Add a patron to the ride's queue.
-        
-        Parameters:
-            patron (Patron): Patron to add to queue
-        """
+        """Add a patron to the ride's queue."""
         self.queue.append(patron)
         patron.state = PatronState.QUEUING
+        patron.target_ride = self
+        
+        # Position patron in queue visually
+        queue_position = len(self.queue) - 1
+        box = self.get_bounding_box()
+        
+        # Create a curved queue line
+        queue_spacing = 1.2
+        patrons_per_row = max(1, int(self.width / queue_spacing))
+        row = queue_position // patrons_per_row
+        col = queue_position % patrons_per_row
+        
+        patron.x = box[0] + col * queue_spacing + 0.5
+        patron.y = box[1] - 1.5 - row * queue_spacing
     
     def load_patrons(self):
-        """Load patrons from queue onto the ride up to capacity."""
+        """Load patrons from queue onto the ride."""
         while len(self.riders) < self.capacity and len(self.queue) > 0:
             patron = self.queue.popleft()
             self.riders.append(patron)
             patron.state = PatronState.RIDING
+            
+            # Position rider on the ride
+            rider_idx = len(self.riders) - 1
+            patron.x = self.x
+            patron.y = self.y
     
     def unload_patrons(self):
         """Unload all patrons from the ride."""
+        self.total_riders_served += len(self.riders)
+        
         for patron in self.riders:
             patron.state = PatronState.ROAMING
+            patron.rides_visited += 1
+            patron.immobile_timer = 3
+            
+            # Place them near the exit of the ride
+            box = self.get_bounding_box()
+            angle = random.uniform(0, 2 * math.pi)
+            patron.x = self.x + (self.width/2 + 2) * math.cos(angle)
+            patron.y = self.y + (self.height/2 + 2) * math.sin(angle)
+            
         self.riders.clear()
     
     def step_change(self):
-        """
-        Update the ride's state for one timestep.
-        Manages the ride's state machine.
-        """
+        """Update the ride's state for one timestep."""
         if self.state == RideState.IDLE:
             if len(self.queue) > 0:
                 self.state = RideState.LOADING
@@ -124,6 +125,7 @@ class Ride(ABC):
             if self.timer <= 0:
                 self.state = RideState.UNLOADING
                 self.timer = self.unload_time
+                self.total_cycles += 1
                 
         elif self.state == RideState.UNLOADING:
             self.timer -= 1
@@ -131,6 +133,17 @@ class Ride(ABC):
             if self.timer <= 0:
                 self.unload_patrons()
                 self.state = RideState.IDLE
+    
+    def get_state_color(self):
+        """Get color based on ride state."""
+        if self.state == RideState.IDLE:
+            return 'lightgray'
+        elif self.state == RideState.LOADING:
+            return 'lightyellow'
+        elif self.state == RideState.RUNNING:
+            return 'lightgreen'
+        elif self.state == RideState.UNLOADING:
+            return 'lightcoral'
     
     @abstractmethod
     def update_movement(self):
@@ -144,7 +157,7 @@ class Ride(ABC):
 
 
 class PirateShip(Ride):
-    """A pirate ship ride that swings back and forth in an arc."""
+    """A pirate ship ride that swings back and forth."""
     
     def __init__(self, name, x, y, capacity=10, duration=20):
         super().__init__(name, x, y, width=8, height=6, capacity=capacity, duration=duration)
@@ -162,21 +175,52 @@ class PirateShip(Ride):
                 self.direction *= -1
     
     def plot(self, ax):
-        """Plot the pirate ship ride."""
+        """Plot the pirate ship with enhanced visuals."""
         box = self.get_bounding_box()
+        
+        # Background box with state color
+        state_color = self.get_state_color()
         rect = patches.Rectangle((box[0], box[1]), self.width, self.height,
-                                 linewidth=2, edgecolor='brown', facecolor='wheat', alpha=0.3)
+                                 linewidth=2, edgecolor='saddlebrown', 
+                                 facecolor=state_color, alpha=0.6)
         ax.add_patch(rect)
         
-        ship_length = 4
+        # Draw the ship
+        ship_length = 5
         end_x = self.x + ship_length * math.sin(self.angle)
         end_y = self.y + ship_length * math.cos(self.angle)
         
-        ax.plot([self.x, end_x], [self.y, end_y], 'k-', linewidth=3)
-        ax.plot(self.x, self.y, 'ro', markersize=8)
+        # Ship arm
+        ax.plot([self.x, end_x], [self.y, end_y], 'k-', linewidth=4)
         
-        ax.text(self.x, box[1] - 0.5, self.name, ha='center', fontsize=9, weight='bold')
-        ax.text(self.x, box[3] + 0.3, f'Queue: {len(self.queue)}', ha='center', fontsize=7)
+        # Ship body
+        ship_width = 2
+        ship_angle = self.angle + math.pi/2
+        ship_x1 = end_x + ship_width * math.cos(ship_angle)
+        ship_y1 = end_y + ship_width * math.sin(ship_angle)
+        ship_x2 = end_x - ship_width * math.cos(ship_angle)
+        ship_y2 = end_y - ship_width * math.sin(ship_angle)
+        
+        ax.fill([ship_x1, ship_x2, end_x], [ship_y1, ship_y2, end_y], 
+               color='saddlebrown', alpha=0.8)
+        
+        # Pivot point
+        ax.plot(self.x, self.y, 'o', color='darkred', markersize=10)
+        
+        # Labels
+        ax.text(self.x, box[1] - 0.8, self.name, ha='center', 
+               fontsize=10, weight='bold', bbox=dict(boxstyle='round', 
+               facecolor='wheat', alpha=0.8))
+        
+        # Status info
+        status = f'Q:{len(self.queue)} R:{len(self.riders)}/{self.capacity}'
+        ax.text(self.x, box[3] + 0.5, status, ha='center', fontsize=8,
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.7))
+        
+        # State indicator
+        ax.text(box[2] + 0.5, self.y, self.state.value.upper()[:3], 
+               fontsize=7, rotation=90, va='center',
+               bbox=dict(boxstyle='round', facecolor=state_color, alpha=0.9))
 
 
 class FerrisWheel(Ride):
@@ -186,7 +230,7 @@ class FerrisWheel(Ride):
         super().__init__(name, x, y, width=10, height=10, capacity=capacity, duration=duration)
         self.angle = 0
         self.rotation_speed = 0.1
-        self.radius = 4
+        self.radius = 4.5
         
     def update_movement(self):
         """Update the rotation."""
@@ -196,37 +240,62 @@ class FerrisWheel(Ride):
                 self.angle -= 2 * math.pi
     
     def plot(self, ax):
-        """Plot the Ferris wheel."""
+        """Plot the Ferris wheel with enhanced visuals."""
         box = self.get_bounding_box()
+        
+        # Background
+        state_color = self.get_state_color()
         rect = patches.Rectangle((box[0], box[1]), self.width, self.height,
-                                 linewidth=2, edgecolor='blue', facecolor='lightblue', alpha=0.2)
+                                 linewidth=2, edgecolor='steelblue', 
+                                 facecolor=state_color, alpha=0.4)
         ax.add_patch(rect)
         
+        # Main wheel
         circle = patches.Circle((self.x, self.y), self.radius, 
-                               fill=False, edgecolor='blue', linewidth=2)
+                               fill=False, edgecolor='steelblue', linewidth=3)
         ax.add_patch(circle)
         
-        num_spokes = 8
-        for i in range(num_spokes):
-            spoke_angle = self.angle + (2 * math.pi * i / num_spokes)
+        # Spokes and gondolas
+        num_gondolas = 8
+        for i in range(num_gondolas):
+            spoke_angle = self.angle + (2 * math.pi * i / num_gondolas)
             spoke_x = self.x + self.radius * math.cos(spoke_angle)
             spoke_y = self.y + self.radius * math.sin(spoke_angle)
-            ax.plot([self.x, spoke_x], [self.y, spoke_y], 'b-', linewidth=1, alpha=0.5)
+            
+            # Spoke
+            ax.plot([self.x, spoke_x], [self.y, spoke_y], 'b-', 
+                   linewidth=1.5, alpha=0.6)
+            
+            # Gondola
+            gondola_color = 'gold' if self.state == RideState.RUNNING else 'lightblue'
+            ax.plot(spoke_x, spoke_y, 's', color=gondola_color, 
+                   markersize=8, markeredgecolor='navy', markeredgewidth=1)
         
-        ax.plot(self.x, self.y, 'bo', markersize=6)
+        # Center hub
+        ax.plot(self.x, self.y, 'o', color='navy', markersize=8)
         
-        ax.text(self.x, box[1] - 0.5, self.name, ha='center', fontsize=9, weight='bold')
-        ax.text(self.x, box[3] + 0.3, f'Queue: {len(self.queue)}', ha='center', fontsize=7)
+        # Labels
+        ax.text(self.x, box[1] - 0.8, self.name, ha='center', 
+               fontsize=10, weight='bold', 
+               bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+        
+        status = f'Q:{len(self.queue)} R:{len(self.riders)}/{self.capacity}'
+        ax.text(self.x, box[3] + 0.5, status, ha='center', fontsize=8,
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.7))
+        
+        ax.text(box[2] + 0.5, self.y, self.state.value.upper()[:3], 
+               fontsize=7, rotation=90, va='center',
+               bbox=dict(boxstyle='round', facecolor=state_color, alpha=0.9))
 
 
 class SpiderRide(Ride):
-    """A spider/hurricane ride that rotates with extending arms."""
+    """A spider/hurricane ride with rotating extending arms."""
     
     def __init__(self, name, x, y, capacity=12, duration=25):
         super().__init__(name, x, y, width=12, height=12, capacity=capacity, duration=duration)
         self.angle = 0
         self.rotation_speed = 0.12
-        self.arm_length = 4
+        self.arm_length = 5
         self.arm_extension = 0
         self.extension_speed = 0.05
         self.extending = True
@@ -250,22 +319,58 @@ class SpiderRide(Ride):
                     self.extending = True
     
     def plot(self, ax):
-        """Plot the spider ride."""
+        """Plot the spider ride with enhanced visuals."""
         box = self.get_bounding_box()
+        
+        # Background
+        state_color = self.get_state_color()
         rect = patches.Rectangle((box[0], box[1]), self.width, self.height,
-                                 linewidth=2, edgecolor='red', facecolor='lightyellow', alpha=0.2)
+                                 linewidth=2, edgecolor='crimson', 
+                                 facecolor=state_color, alpha=0.3)
         ax.add_patch(rect)
         
+        # Arms
         num_arms = 6
         for i in range(num_arms):
             arm_angle = self.angle + (2 * math.pi * i / num_arms)
             current_length = self.arm_length * (0.5 + 0.5 * self.arm_extension)
+            
+            # Arm gradient effect
+            segments = 10
+            for seg in range(segments):
+                seg_start = (seg / segments) * current_length
+                seg_end = ((seg + 1) / segments) * current_length
+                
+                x1 = self.x + seg_start * math.cos(arm_angle)
+                y1 = self.y + seg_start * math.sin(arm_angle)
+                x2 = self.x + seg_end * math.cos(arm_angle)
+                y2 = self.y + seg_end * math.sin(arm_angle)
+                
+                alpha = 0.3 + 0.7 * (seg / segments)
+                ax.plot([x1, x2], [y1, y2], 'r-', linewidth=3, alpha=alpha)
+            
+            # End car
             arm_x = self.x + current_length * math.cos(arm_angle)
             arm_y = self.y + current_length * math.sin(arm_angle)
-            ax.plot([self.x, arm_x], [self.y, arm_y], 'r-', linewidth=2)
-            ax.plot(arm_x, arm_y, 'ro', markersize=6)
+            car_color = 'red' if self.state == RideState.RUNNING else 'pink'
+            ax.plot(arm_x, arm_y, 'o', color=car_color, markersize=10,
+                   markeredgecolor='darkred', markeredgewidth=2)
         
-        ax.plot(self.x, self.y, 'ko', markersize=8)
+        # Center
+        ax.plot(self.x, self.y, 'o', color='darkred', markersize=12)
         
-        ax.text(self.x, box[1] - 0.5, self.name, ha='center', fontsize=9, weight='bold')
-        ax.text(self.x, box[3] + 0.3, f'Queue: {len(self.queue)}', ha='center', fontsize=7)
+        # Labels
+        ax.text(self.x, box[1] - 0.8, self.name, ha='center', 
+               fontsize=10, weight='bold',
+               bbox=dict(boxstyle='round', facecolor='mistyrose', alpha=0.8))
+        
+        status = f'Q:{len(self.queue)} R:{len(self.riders)}/{self.capacity}'
+        ax.text(self.x, box[3] + 0.5, status, ha='center', fontsize=8,
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.7))
+        
+        ax.text(box[2] + 0.5, self.y, self.state.value.upper()[:3], 
+               fontsize=7, rotation=90, va='center',
+               bbox=dict(boxstyle='round', facecolor=state_color, alpha=0.9))
+
+
+import random  # Add this at the top with other imports
