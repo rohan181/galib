@@ -1,0 +1,9 @@
+# Adventure World Map Configuration
+# Format: RideType, Name, X, Y, Capacity, Duration
+# Format: obstacle, X, Y, Width, Height
+
+PirateShip, Pirate's Revenge, 25, 25, 8, 15
+FerrisWheel, Sky View, 75, 25, 12, 25
+SpiderRide, Tornado, 50, 70, 10, 20
+obstacle, 50, 45, 10, 5
+obstacle, 30, 60, 6, 6
