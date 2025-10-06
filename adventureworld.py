@@ -1,10 +1,11 @@
 """
 adventureworld.py
-Main program for Adventure World theme park simulation.
+Main program with intelligent ride positioning and enhanced visuals.
+"""
 
-Usage:
-    Interactive mode: python3 adventureworld.py -i
-    Batch mode: python3 adventureworld.py -f map.csv -p params.csv
+"""
+adventureworld.py
+Main program with intelligent ride positioning and enhanced visuals.
 """
 
 import argparse
@@ -14,112 +15,139 @@ from a import PirateShip, FerrisWheel, SpiderRide
 from simulation import Simulation
 
 
-def create_sample_park():
-    """Create a sample park with several rides."""
-    park = Park(width=100, height=100)
+def create_optimized_park(num_rides=3):
+    """
+    Create a BIGGER park with optimally positioned rides.
     
-    park.add_ride(PirateShip("Pirate's Revenge", 25, 25, capacity=8, duration=15))
-    park.add_ride(FerrisWheel("Sky View", 75, 25, capacity=12, duration=25))
-    park.add_ride(SpiderRide("Tornado", 50, 70, capacity=10, duration=20))
+    Parameters:
+        num_rides (int): Number of rides to create (1-6)
+        
+    Returns:
+        Park: Configured park with optimally placed rides
+    """
+    park = Park(width=280, height=200)  # PERFECT SPACING PARK!
     
-    park.add_terrain_object(TerrainObject(50, 45, 10, 5, "obstacle"))
+    # Get optimal positions
+    positions = park.get_optimal_ride_positions(num_rides)
+    
+    # Define ride types with varied configurations
+    ride_configs = [
+        lambda pos: PirateShip("Pirate's Revenge", pos[0], pos[1], 
+                              capacity=10, duration=20),
+        lambda pos: FerrisWheel("Sky Wheel", pos[0], pos[1], 
+                               capacity=16, duration=30),
+        lambda pos: SpiderRide("Octopus Spin", pos[0], pos[1], 
+                              capacity=12, duration=25),
+        lambda pos: PirateShip("Galleon Swing", pos[0], pos[1], 
+                              capacity=8, duration=18),
+        lambda pos: FerrisWheel("Giant Wheel", pos[0], pos[1], 
+                               capacity=20, duration=35),
+        lambda pos: SpiderRide("Spider Web", pos[0], pos[1], 
+                              capacity=10, duration=22)
+    ]
+    
+    print("\n🎢 Creating Adventure World Park...")
+    print(f"📍 Positioning {num_rides} rides optimally...")
+    print("─" * 50)
+    
+    # Add rides at optimal positions
+    for i in range(min(num_rides, len(positions))):
+        ride = ride_configs[i](positions[i])
+        park.add_ride(ride)
+    
+    # Add some decorative obstacles between rides
+    if num_rides >= 2:
+        # Add trees/gardens between rides for aesthetics
+        park.add_terrain_object(TerrainObject(park.width/2, park.height/2, 
+                                             6, 6, "obstacle"))
+    
+    print("─" * 50)
+    print(f"✓ Park created successfully with {len(park.rides)} rides!\n")
     
     return park
 
 
 def interactive_mode():
     """Run simulation in interactive mode with user prompts."""
-    print("="*60)
-    print("ADVENTURE WORLD - INTERACTIVE MODE")
-    print("="*60)
+    print("=" * 60)
+    print("🎡 ADVENTURE WORLD - INTERACTIVE MODE 🎢".center(60))
+    print("=" * 60)
+    print()
     
     try:
-        num_rides = int(input("Number of rides (1-5): "))
-        num_rides = max(1, min(5, num_rides))
+        num_rides = int(input("🎢 Number of rides (1-6): "))
+        num_rides = max(1, min(6, num_rides))
         
-        max_timesteps = int(input("Simulation duration (timesteps, e.g., 300): "))
+        max_timesteps = int(input("⏱️  Simulation duration in timesteps (200-1000): "))
+        max_timesteps = max(200, min(1000, max_timesteps))
         
-        spawn_rate = float(input("Patron spawn rate (0.0-1.0, e.g., 0.3): "))
-        spawn_rate = max(0.0, min(1.0, spawn_rate))
+        spawn_rate = float(input("👥 Patron spawn rate (0.1-0.5 recommended): "))
+        spawn_rate = max(0.05, min(0.8, spawn_rate))
         
-        show_animation = input("Show animation? (y/n): ").lower() == 'y'
+        show_animation = input("🎬 Show live animation? (y/n): ").lower() == 'y'
         
     except ValueError:
-        print("Invalid input. Using default values.")
+        print("\n⚠️  Invalid input. Using default values...")
         num_rides = 3
-        max_timesteps = 300
+        max_timesteps = 400
         spawn_rate = 0.3
         show_animation = True
     
-    print(f"\nCreating park with {num_rides} rides...")
-    park = Park(width=100, height=100)
+    print("\n" + "─" * 60)
+    print(f"⚙️  Configuration:")
+    print(f"   • Rides: {num_rides}")
+    print(f"   • Duration: {max_timesteps} timesteps")
+    print(f"   • Spawn rate: {spawn_rate}")
+    print(f"   • Animation: {'ON' if show_animation else 'OFF'}")
+    print("─" * 60 + "\n")
     
-    ride_types = [
-        lambda n: PirateShip(f"Pirate Ship {n}", 25, 25 + n*15, capacity=8, duration=15),
-        lambda n: FerrisWheel(f"Ferris Wheel {n}", 75, 25 + n*15, capacity=12, duration=25),
-        lambda n: SpiderRide(f"Spider {n}", 50, 50 + n*15, capacity=10, duration=20)
-    ]
+    # Create optimized park
+    park = create_optimized_park(num_rides)
     
-    for i in range(num_rides):
-        ride = ride_types[i % len(ride_types)](i + 1)
-        park.add_ride(ride)
-    
-    park.add_terrain_object(TerrainObject(50, 45, 8, 4, "obstacle"))
-    
-    print("Starting simulation...")
+    # Run simulation
+    print("🚀 Starting simulation...\n")
     sim = Simulation(park, max_timesteps=max_timesteps, spawn_rate=spawn_rate)
-    sim.run(interactive=show_animation)
+    sim.run(interactive=show_animation, plot_interval=3)
     sim.print_statistics()
 
 
 def batch_mode(map_file, param_file):
-    """
-    Run simulation in batch mode using configuration files.
-    
-    Parameters:
-        map_file (str): Path to map configuration file
-        param_file (str): Path to parameter configuration file
-    """
-    print("="*60)
-    print("ADVENTURE WORLD - BATCH MODE")
-    print("="*60)
-    print(f"Map file: {map_file}")
-    print(f"Parameter file: {param_file}")
+    """Run simulation in batch mode using configuration files."""
+    print("=" * 60)
+    print("🎡 ADVENTURE WORLD - BATCH MODE 🎢".center(60))
+    print("=" * 60)
+    print(f"📄 Map file: {map_file}")
+    print(f"📄 Parameter file: {param_file}")
+    print()
     
     try:
         params = load_parameters(param_file)
         park = load_map(map_file)
         
-        max_timesteps = params.get('max_timesteps', 300)
+        max_timesteps = params.get('max_timesteps', 400)
         spawn_rate = params.get('spawn_rate', 0.3)
         
-        print(f"\nRunning simulation with:")
-        print(f"  Max timesteps: {max_timesteps}")
-        print(f"  Spawn rate: {spawn_rate}")
-        print(f"  Rides: {len(park.rides)}")
+        print("⚙️  Configuration:")
+        print(f"   • Max timesteps: {max_timesteps}")
+        print(f"   • Spawn rate: {spawn_rate}")
+        print(f"   • Rides: {len(park.rides)}")
+        print("─" * 60 + "\n")
         
+        print("🚀 Starting simulation...\n")
         sim = Simulation(park, max_timesteps=max_timesteps, spawn_rate=spawn_rate)
         sim.run(interactive=False)
         sim.print_statistics()
         
     except FileNotFoundError as e:
-        print(f"Error: {e}")
+        print(f"❌ Error: {e}")
         sys.exit(1)
     except Exception as e:
-        print(f"Error loading configuration: {e}")
+        print(f"❌ Error loading configuration: {e}")
         sys.exit(1)
 
 
 def load_parameters(param_file):
-    """
-    Load parameters from CSV file.
-    
-    Parameters:
-        param_file (str): Path to parameter file
-        
-    Returns:
-        dict: Dictionary of parameters
-    """
+    """Load parameters from CSV file."""
     params = {}
     with open(param_file, 'r') as f:
         for line in f:
@@ -142,16 +170,10 @@ def load_parameters(param_file):
 
 
 def load_map(map_file):
-    """
-    Load park layout from CSV file.
-    
-    Parameters:
-        map_file (str): Path to map file
-        
-    Returns:
-        Park: Configured park object
-    """
+    """Load park layout from CSV file with optimal positioning fallback."""
     park = Park(width=100, height=100)
+    
+    rides_to_add = []
     
     with open(map_file, 'r') as f:
         for line in f:
@@ -165,20 +187,44 @@ def load_map(map_file):
                 obj_type = parts[0].lower()
                 
                 if obj_type == 'pirateship' and len(parts) >= 6:
-                    name, x, y, capacity, duration = parts[1], float(parts[2]), float(parts[3]), int(parts[4]), int(parts[5])
-                    park.add_ride(PirateShip(name, x, y, capacity, duration))
+                    name, x, y = parts[1], float(parts[2]), float(parts[3])
+                    capacity, duration = int(parts[4]), int(parts[5])
+                    rides_to_add.append(
+                        PirateShip(name, x, y, capacity, duration))
                 
                 elif obj_type == 'ferriswheel' and len(parts) >= 6:
-                    name, x, y, capacity, duration = parts[1], float(parts[2]), float(parts[3]), int(parts[4]), int(parts[5])
-                    park.add_ride(FerrisWheel(name, x, y, capacity, duration))
+                    name, x, y = parts[1], float(parts[2]), float(parts[3])
+                    capacity, duration = int(parts[4]), int(parts[5])
+                    rides_to_add.append(
+                        FerrisWheel(name, x, y, capacity, duration))
                 
                 elif obj_type == 'spiderride' and len(parts) >= 6:
-                    name, x, y, capacity, duration = parts[1], float(parts[2]), float(parts[3]), int(parts[4]), int(parts[5])
-                    park.add_ride(SpiderRide(name, x, y, capacity, duration))
+                    name, x, y = parts[1], float(parts[2]), float(parts[3])
+                    capacity, duration = int(parts[4]), int(parts[5])
+                    rides_to_add.append(
+                        SpiderRide(name, x, y, capacity, duration))
                 
                 elif obj_type == 'obstacle' and len(parts) >= 5:
-                    x, y, width, height = float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
-                    park.add_terrain_object(TerrainObject(x, y, width, height, "obstacle"))
+                    x, y = float(parts[1]), float(parts[2])
+                    width, height = float(parts[3]), float(parts[4])
+                    park.add_terrain_object(
+                        TerrainObject(x, y, width, height, "obstacle"))
+    
+    # Add rides with overlap checking
+    print("\n🎢 Loading rides from map file...")
+    print("─" * 50)
+    
+    for ride in rides_to_add:
+        if not park.add_ride(ride):
+            # If overlap, try to reposition
+            print(f"🔄 Attempting to reposition {ride.name}...")
+            positions = park.get_optimal_ride_positions(len(rides_to_add))
+            for pos in positions:
+                ride.x, ride.y = pos
+                if park.add_ride(ride):
+                    break
+    
+    print("─" * 50 + "\n")
     
     return park
 
@@ -186,20 +232,26 @@ def load_map(map_file):
 def main():
     """Main entry point for the program."""
     parser = argparse.ArgumentParser(
-        description='Adventure World Theme Park Simulation',
+        description='🎡 Adventure World Theme Park Simulation 🎢',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  Interactive mode:
+  Interactive mode (recommended):
     python3 adventureworld.py -i
     
   Batch mode:
     python3 adventureworld.py -f map1.csv -p params1.csv
+    
+Features:
+  ✓ Intelligent ride positioning
+  ✓ Smart patrons that visit all rides
+  ✓ Real-time statistics and visualization
+  ✓ Beautiful animated graphics
         """
     )
     
     parser.add_argument('-i', '--interactive', action='store_true',
-                       help='Run in interactive mode')
+                       help='Run in interactive mode (recommended)')
     parser.add_argument('-f', '--map-file', type=str,
                        help='Map configuration file (batch mode)')
     parser.add_argument('-p', '--param-file', type=str,
@@ -213,8 +265,10 @@ Examples:
         batch_mode(args.map_file, args.param_file)
     else:
         parser.print_help()
-        print("\nError: Must specify either -i for interactive mode")
-        print("       or both -f and -p for batch mode")
+        print("\n" + "=" * 60)
+        print("⚠️  Error: Must specify either -i for interactive mode")
+        print("          or both -f and -p for batch mode")
+        print("=" * 60)
         sys.exit(1)
 
 

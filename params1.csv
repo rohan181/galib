@@ -1,5 +1,4 @@
-# Adventure World Parameter Configuration
 # Format: parameter_name, value
 
-max_timesteps, 300
+max_timesteps, 1000
 spawn_rate, 0.3

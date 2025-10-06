@@ -77,7 +77,7 @@ class Simulation:
         """
         if interactive:
             plt.ion()
-            fig = plt.figure(figsize=(16, 10))
+            fig = plt.figure(figsize=(24, 14))  # PERFECT SPACING figure
             gs = GridSpec(2, 2, figure=fig, height_ratios=[3, 1], hspace=0.3, wspace=0.3)
             
             ax_main = fig.add_subplot(gs[0, :])  # Main park view (top, full width)

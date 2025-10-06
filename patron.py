@@ -1,6 +1,6 @@
 """
 patron.py
-Enhanced Patron class with improved visualization for Adventure World.
+FIXED: Smart Patron system with working exit behavior.
 """
 
 import math
@@ -10,18 +10,10 @@ from config import COLOR_ROAMING, COLOR_EXITING
 
 
 class Patron:
-    """Represents a visitor to the theme park."""
+    """Represents a visitor with intelligent ride-seeking behavior."""
     
     def __init__(self, patron_id, x, y, name=None):
-        """
-        Initialize a patron.
-        
-        Parameters:
-            patron_id (int): Unique identifier
-            x (float): Starting x-coordinate
-            y (float): Starting y-coordinate
-            name (str): Optional name for the patron
-        """
+        """Initialize a patron."""
         self.id = patron_id
         self.name = name if name else f"Patron_{patron_id}"
         self.x = x
@@ -29,113 +21,156 @@ class Patron:
         self.state = PatronState.ROAMING
         self.target_ride = None
         self.immobile_timer = DEFAULT_PATRON_IMMOBILE_TIME
-        self.move_speed = DEFAULT_PATRON_MOVE_SPEED
+        self.move_speed = DEFAULT_PATRON_MOVE_SPEED + random.uniform(-0.1, 0.15)
         
-        # Track rides visited and desired visits
-        self.rides_visited = 0
-        self.desired_rides = random.randint(2, 5)
+        # Smart visiting system
+        self.visited_rides = set()  # Track which rides visited
+        self.rides_completed = 0  # Counter for completed rides
+        self.desired_rides = random.randint(2, 4)  # Want to visit 2-4 rides
+        self.current_target = None  # Specific ride heading to
         
-        # For visualization - track movement history
+        # Path visualization
         self.path_history = [(x, y)]
-        self.max_history = 20
+        self.max_history = 30
         
-        # Time tracking
+        # Statistics
         self.time_in_park = 0
         self.time_queuing = 0
         self.time_riding = 0
+        self.time_roaming = 0
+        
+        # Personality
+        self.patience = random.randint(5, 15)
+        self.adventure_level = random.random()
         
     def step_change(self, park):
-        """
-        Update patron behavior for one timestep.
-        
-        Parameters:
-            park (Park): The park object containing rides and terrain
-        """
+        """Update patron behavior for one timestep."""
         self.time_in_park += 1
         
         if self.state == PatronState.QUEUING:
             self.time_queuing += 1
         elif self.state == PatronState.RIDING:
             self.time_riding += 1
+        elif self.state == PatronState.ROAMING:
+            self.time_roaming += 1
         
         if self.immobile_timer > 0:
             self.immobile_timer -= 1
             return
         
         if self.state == PatronState.ROAMING:
-            self.roam(park)
+            self.intelligent_roam(park)
         elif self.state == PatronState.QUEUING:
-            pass  # Wait in queue
+            self.check_queue_patience(park)
         elif self.state == PatronState.RIDING:
             pass  # Enjoying the ride
         elif self.state == PatronState.EXITING:
             self.move_to_exit(park)
         
-        # Update path history for trail effect
+        # Update path history
         if self.state in [PatronState.ROAMING, PatronState.EXITING]:
             self.path_history.append((self.x, self.y))
             if len(self.path_history) > self.max_history:
                 self.path_history.pop(0)
     
-    def roam(self, park):
-        """
-        Random or directed movement while roaming.
-        
-        Parameters:
-            park (Park): The park object
-        """
-        # Check if patron has visited enough rides
-        if self.rides_visited >= self.desired_rides:
-            if random.random() < 0.02:
+    def intelligent_roam(self, park):
+        """Smart roaming that visits all rides."""
+        # FIXED: Check if completed enough rides and ready to exit
+        if self.rides_completed >= self.desired_rides:
+            # Higher exit chance after completing desired rides
+            if random.random() < 0.08:  # 8% chance per step
                 self.state = PatronState.EXITING
+                self.current_target = None
                 return
         
-        # Actively seek nearby rides
-        nearest_ride = None
-        nearest_distance = float('inf')
+        # Find unvisited rides
+        unvisited_rides = [r for r in park.rides if r not in self.visited_rides]
         
-        for ride in park.rides:
-            distance = math.sqrt((self.x - ride.x)**2 + (self.y - ride.y)**2)
-            if distance < nearest_distance:
-                nearest_distance = distance
-                nearest_ride = ride
+        # If no target, pick a new one
+        if self.current_target is None or self.current_target in self.visited_rides:
+            if unvisited_rides:
+                # Prefer unvisited rides
+                self.current_target = random.choice(unvisited_rides)
+            elif park.rides:
+                # If visited all, pick a favorite to revisit
+                self.current_target = random.choice(park.rides)
         
-        # If very close to a ride, high chance to join queue
-        if nearest_distance < 8:
-            # Don't join if queue is too long
-            if len(nearest_ride.queue) < nearest_ride.capacity * 3:
-                if random.random() < 0.3:
-                    nearest_ride.add_to_queue(self)
-                    self.target_ride = nearest_ride
-                    return
-        
-        # Move toward nearest ride or random walk
-        if nearest_ride and random.random() < 0.6:
-            dx = nearest_ride.x - self.x
-            dy = nearest_ride.y - self.y
+        # Move toward current target
+        if self.current_target:
+            dx = self.current_target.x - self.x
+            dy = self.current_target.y - self.y
             distance = math.sqrt(dx**2 + dy**2)
             
-            angle_to_ride = math.atan2(dy, dx)
-            angle = angle_to_ride + random.uniform(-0.5, 0.5)
+            # If close enough, try to join queue
+            if distance < 15:
+                queue_size = len(self.current_target.queue)
+                max_acceptable_queue = self.current_target.capacity * 2
+                
+                # More likely to join if haven't visited this ride
+                join_chance = 0.5 if self.current_target not in self.visited_rides else 0.3
+                
+                if queue_size < max_acceptable_queue and random.random() < join_chance:
+                    self.current_target.add_to_queue(self)
+                    return
             
-            new_x = self.x + self.move_speed * math.cos(angle)
-            new_y = self.y + self.move_speed * math.sin(angle)
+            # Calculate movement with some wandering
+            if distance > 1:
+                angle_to_target = math.atan2(dy, dx)
+                wander = random.uniform(-0.3, 0.3)
+                angle = angle_to_target + wander
+                
+                new_x = self.x + self.move_speed * math.cos(angle)
+                new_y = self.y + self.move_speed * math.sin(angle)
+                
+                if park.is_valid_position(new_x, new_y):
+                    self.x = new_x
+                    self.y = new_y
+                else:
+                    # If blocked, try random direction
+                    angle = random.uniform(0, 2 * math.pi)
+                    new_x = self.x + self.move_speed * math.cos(angle)
+                    new_y = self.y + self.move_speed * math.sin(angle)
+                    if park.is_valid_position(new_x, new_y):
+                        self.x = new_x
+                        self.y = new_y
         else:
+            # Random walk if no target
             angle = random.uniform(0, 2 * math.pi)
             new_x = self.x + self.move_speed * math.cos(angle)
             new_y = self.y + self.move_speed * math.sin(angle)
-        
-        if park.is_valid_position(new_x, new_y):
-            self.x = new_x
-            self.y = new_y
+            
+            if park.is_valid_position(new_x, new_y):
+                self.x = new_x
+                self.y = new_y
     
-    def move_to_exit(self, park):
+    def check_queue_patience(self, park):
+        """Check if patron gets impatient in queue."""
+        for ride in park.rides:
+            if self in ride.queue:
+                queue_position = list(ride.queue).index(self)
+                if queue_position > self.patience and random.random() < 0.05:
+                    ride.queue.remove(self)
+                    self.state = PatronState.ROAMING
+                    self.current_target = None
+                break
+    
+    def mark_ride_completed(self, ride):
         """
-        Move patron toward nearest exit.
+        FIXED: Mark a ride as completed (called when unloading from ride).
         
         Parameters:
-            park (Park): The park object
+            ride: The ride that was just completed
         """
+        self.visited_rides.add(ride)
+        self.rides_completed += 1
+        self.current_target = None  # Clear target to find new ride
+        
+        # Debug output
+        if self.rides_completed == 1:
+            print(f"  👤 Patron {self.id} completed first ride! ({self.rides_completed}/{self.desired_rides})")
+    
+    def move_to_exit(self, park):
+        """Move patron toward nearest exit."""
         if len(park.exits) > 0:
             nearest_exit = min(park.exits, key=lambda e: 
                              math.sqrt((self.x - e[0])**2 + (self.y - e[1])**2))
@@ -144,37 +179,57 @@ class Patron:
             dy = nearest_exit[1] - self.y
             distance = math.sqrt(dx**2 + dy**2)
             
-            if distance < 1:
+            if distance < 2:
+                # Debug output
+                print(f"  👋 Patron {self.id} exiting after {self.rides_completed} rides!")
                 park.remove_patron(self)
             else:
                 self.x += self.move_speed * dx / distance
                 self.y += self.move_speed * dy / distance
     
     def plot(self, ax):
-        """
-        Plot the patron with enhanced visuals.
-        
-        Parameters:
-            ax: Matplotlib axes object
-        """
-        # Plot movement trail (fading path)
+        """Plot the patron with enhanced visuals."""
+        # Draw movement trail with gradient
         if len(self.path_history) > 1 and self.state == PatronState.ROAMING:
             for i in range(len(self.path_history) - 1):
-                alpha = (i + 1) / len(self.path_history) * 0.3
+                alpha = (i + 1) / len(self.path_history) * 0.4
+                color = 'green' if self.current_target else 'gray'
                 ax.plot([self.path_history[i][0], self.path_history[i+1][0]],
                        [self.path_history[i][1], self.path_history[i+1][1]],
-                       'g-', alpha=alpha, linewidth=0.5)
+                       color=color, alpha=alpha, linewidth=1)
+        
+        # Draw line to target ride
+        if self.current_target and self.state == PatronState.ROAMING:
+            ax.plot([self.x, self.current_target.x], [self.y, self.current_target.y],
+                   'g--', alpha=0.2, linewidth=0.5)
         
         # Plot patron with state-specific appearance
         if self.state == PatronState.ROAMING:
-            ax.plot(self.x, self.y, 'o', color='limegreen', markersize=6, 
-                   markeredgecolor='darkgreen', markeredgewidth=1, label='Roaming')
+            color = 'limegreen' if self.current_target else 'yellowgreen'
+            ax.plot(self.x, self.y, 'o', color=color, markersize=7, 
+                   markeredgecolor='darkgreen', markeredgewidth=1.5, 
+                   label='Roaming', zorder=5)
+            
         elif self.state == PatronState.EXITING:
-            ax.plot(self.x, self.y, 's', color='orange', markersize=6,
-                   markeredgecolor='darkorange', markeredgewidth=1, label='Exiting')
+            ax.plot(self.x, self.y, 's', color='orange', markersize=7,
+                   markeredgecolor='darkorange', markeredgewidth=1.5, 
+                   label='Exiting', zorder=5)
+            
         elif self.state == PatronState.QUEUING:
-            ax.plot(self.x, self.y, '^', color='dodgerblue', markersize=6,
-                   markeredgecolor='navy', markeredgewidth=1, label='Queuing')
+            ax.plot(self.x, self.y, '^', color='dodgerblue', markersize=8,
+                   markeredgecolor='navy', markeredgewidth=1.5, 
+                   label='Queuing', zorder=5)
+            
         elif self.state == PatronState.RIDING:
-            ax.plot(self.x, self.y, '*', color='magenta', markersize=8,
-                   markeredgecolor='purple', markeredgewidth=1, label='Riding')
+            ax.plot(self.x, self.y, '*', color='gold', markersize=12,
+                   markeredgecolor='orange', markeredgewidth=2, 
+                   label='Riding', zorder=5)
+        
+        # Show completed rides count as small number
+        if self.state in [PatronState.ROAMING, PatronState.EXITING]:
+            if self.rides_completed > 0:
+                ax.text(self.x, self.y + 1.2, str(self.rides_completed), 
+                       fontsize=7, ha='center', weight='bold',
+                       color='white', 
+                       bbox=dict(boxstyle='circle', facecolor='green', 
+                                alpha=0.8, pad=0.2))
