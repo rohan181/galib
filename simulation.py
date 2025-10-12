@@ -1,31 +1,68 @@
 """
 simulation.py
-Enhanced simulation engine with real-time statistics display.
+Enhanced simulation engine with real-time statistics and time of day effects.
 """
 
 import random
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from config import DEFAULT_MAX_TIMESTEPS, DEFAULT_SPAWN_RATE, PatronState
+from config import DEFAULT_MAX_TIMESTEPS, DEFAULT_SPAWN_RATE, PatronState, RideState
 
 
 class Simulation:
-    """Main simulation engine with enhanced visualization."""
+    """Main simulation engine with enhanced visualization and time of day effects."""
     
-    def __init__(self, park, max_timesteps=DEFAULT_MAX_TIMESTEPS, spawn_rate=DEFAULT_SPAWN_RATE):
+    def __init__(self, park, max_timesteps=DEFAULT_MAX_TIMESTEPS, spawn_rate=DEFAULT_SPAWN_RATE, time_of_day="afternoon"):
         """
-        Initialize the simulation.
+        Initialize the simulation with time of day effects.
         
         Parameters:
             park (Park): The park to simulate
             max_timesteps (int): Maximum number of timesteps to run
-            spawn_rate (float): Probability of spawning patron per timestep
+            spawn_rate (float): Base probability of spawning patron per timestep
+            time_of_day (str): Time period - 'morning', 'afternoon', 'evening', 'night'
         """
         self.park = park
         self.max_timesteps = max_timesteps
-        self.spawn_rate = spawn_rate
+        self.base_spawn_rate = spawn_rate
+        self.time_of_day = time_of_day
         self.current_timestep = 0
         self.next_patron_id = 1
+        
+        # Time of day effects on simulation
+        self.time_effects = {
+            'morning': {
+                'spawn_multiplier': 0.7,    # Fewer visitors
+                'ride_speed': 1.0,           # Normal speed
+                'description': '🌅 Morning - Park opening',
+                'emoji': '🌅'
+            },
+            'afternoon': {
+                'spawn_multiplier': 1.3,    # Peak visitors
+                'ride_speed': 1.0,           # Normal speed
+                'description': '☀️ Afternoon - Peak hours',
+                'emoji': '☀️'
+            },
+            'evening': {
+                'spawn_multiplier': 0.9,    # Moderate visitors
+                'ride_speed': 0.9,           # Slightly slower
+                'description': '🌆 Evening - Winding down',
+                'emoji': '🌆'
+            },
+            'night': {
+                'spawn_multiplier': 0.4,    # Few visitors
+                'ride_speed': 0.8,           # Slower operations
+                'description': '🌙 Night - Closing time',
+                'emoji': '🌙'
+            }
+        }
+        
+        # Apply time effects
+        current_effects = self.time_effects.get(time_of_day, self.time_effects['afternoon'])
+        self.spawn_rate = spawn_rate * current_effects['spawn_multiplier']
+        self.ride_speed_multiplier = current_effects['ride_speed']
+        self.time_description = current_effects['description']
+        self.time_emoji = current_effects['emoji']
         
         self.total_patrons_spawned = 0
         self.total_patrons_exited = 0
@@ -34,10 +71,16 @@ class Simulation:
         self.patron_counts = []
         self.queue_lengths = []
         self.timesteps_recorded = []
+        
+        # Display time of day effects
+        print(f"\n⏰ {self.time_description}")
+        print(f"   Base spawn rate: {spawn_rate:.2f}")
+        print(f"   Adjusted spawn rate: {self.spawn_rate:.2f} ({current_effects['spawn_multiplier']}x)")
+        print(f"   Ride speed: {self.ride_speed_multiplier * 100:.0f}%\n")
     
     def step(self):
-        """Execute one timestep of the simulation."""
-        # Spawn new patrons
+        """Execute one timestep of the simulation with time of day effects."""
+        # Spawn new patrons (uses adjusted spawn_rate)
         if random.random() < self.spawn_rate:
             self.park.spawn_patron(self.next_patron_id)
             self.next_patron_id += 1
@@ -52,8 +95,16 @@ class Simulation:
         patrons_exited = initial_patron_count - len(self.park.patrons)
         self.total_patrons_exited += patrons_exited
         
-        # Update all rides
+        # Update all rides with time of day effects
         for ride in self.park.rides:
+            # Apply ride speed multiplier for evening/night
+            if self.ride_speed_multiplier < 1.0:
+                # Slow down rides at evening/night
+                if ride.state == RideState.RUNNING and ride.timer > 1:
+                    # Randomly add extra time to simulate slower operation
+                    if random.random() > self.ride_speed_multiplier:
+                        ride.timer += 1  # Makes ride take longer
+            
             ride.step_change()
         
         self.current_timestep += 1
@@ -91,8 +142,8 @@ class Simulation:
             if interactive and self.current_timestep % plot_interval == 0:
                 # Clear and update main park view
                 self.park.plot(ax_main)
-                ax_main.set_title(f'Adventure World - Timestep {self.current_timestep}/{self.max_timesteps}',
-                                 fontsize=14, weight='bold')
+                title = f'Adventure World {self.time_emoji} - Timestep {self.current_timestep}/{self.max_timesteps}'
+                ax_main.set_title(title, fontsize=14, weight='bold')
                 
                 # Update statistics graph
                 self.plot_statistics(ax_stats)
@@ -133,7 +184,8 @@ class Simulation:
             
             ax.set_xlabel('Timestep', fontsize=10)
             ax.set_ylabel('Count', fontsize=10)
-            ax.set_title('Park Statistics Over Time', fontsize=11, weight='bold')
+            ax.set_title(f'Park Statistics Over Time ({self.time_of_day.title()})', 
+                        fontsize=11, weight='bold')
             ax.legend(loc='upper left', fontsize=9)
             ax.grid(True, alpha=0.3)
     
@@ -156,7 +208,9 @@ class Simulation:
         info_lines = [
             "═══ PARK STATISTICS ═══",
             f"",
+            f"Time: {self.time_of_day.upper()} {self.time_emoji}",
             f"Timestep: {self.current_timestep}/{self.max_timesteps}",
+            f"Spawn Rate: {self.spawn_rate:.2f}",
             f"",
             f"PATRONS:",
             f"  • In Park: {len(self.park.patrons)}",
@@ -201,6 +255,10 @@ class Simulation:
         
         return {
             'timesteps': self.current_timestep,
+            'time_of_day': self.time_of_day,
+            'base_spawn_rate': self.base_spawn_rate,
+            'actual_spawn_rate': self.spawn_rate,
+            'ride_speed_multiplier': self.ride_speed_multiplier,
             'total_spawned': self.total_patrons_spawned,
             'total_exited': self.total_patrons_exited,
             'remaining_patrons': len(self.park.patrons),
@@ -218,6 +276,12 @@ class Simulation:
         print("\n" + "═"*60)
         print("SIMULATION COMPLETE".center(60))
         print("═"*60)
+        print(f"\n{'TIME OF DAY EFFECTS':^60}")
+        print("─"*60)
+        print(f"  Time period: {stats['time_of_day'].upper()} {self.time_emoji}")
+        print(f"  Base spawn rate: {stats['base_spawn_rate']:.2f}")
+        print(f"  Actual spawn rate: {stats['actual_spawn_rate']:.2f}")
+        print(f"  Ride speed multiplier: {stats['ride_speed_multiplier']:.1%}")
         print(f"\n{'OVERALL STATISTICS':^60}")
         print("─"*60)
         print(f"  Total timesteps: {stats['timesteps']}")

@@ -1,5 +1,3 @@
-
-
 import random
 import math
 import matplotlib.pyplot as plt
@@ -66,13 +64,14 @@ class TerrainObject:
 class Park:
     """PERFECT SPACING park - optimized for 1-6 rides."""
     
-    def __init__(self, width=280, height=200):  # EVEN BIGGER for perfect spacing!
+    def __init__(self, width=280, height=200):
         """Initialize the park with extra large dimensions."""
         self.width = width
         self.height = height
         self.rides = []
         self.patrons = []
         self.terrain_objects = []
+        self.patron_strategy = 'balanced'  # NEW: Patron strategy control
         
         # Entrances and exits at corners
         self.entrances = [
@@ -203,11 +202,23 @@ class Park:
             self.patrons.remove(patron)
     
     def spawn_patron(self, patron_id):
-        """Spawn a new patron at a random entrance."""
+        """Spawn a new patron at a random entrance with strategy control."""
         entrance = random.choice(self.entrances)
         x = entrance[0] + random.uniform(-2, 2)
         y = entrance[1] + random.uniform(-2, 2)
-        patron = Patron(patron_id, x, y)
+        
+        # Apply strategy setting - NEW!
+        if self.patron_strategy == 'casual':
+            personality = 'casual'
+        elif self.patron_strategy == 'thrill_seeker':
+            personality = 'thrill_seeker'
+        elif self.patron_strategy == 'random':
+            personality = random.choice(['casual', 'balanced', 'thrill_seeker'])
+        else:  # balanced
+            # Weighted toward balanced
+            personality = random.choice(['casual', 'balanced', 'balanced', 'thrill_seeker'])
+        
+        patron = Patron(patron_id, x, y, personality=personality)
         self.add_patron(patron)
         return patron
     

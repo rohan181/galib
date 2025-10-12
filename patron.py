@@ -1,6 +1,6 @@
 """
 patron.py
-FIXED: Smart Patron system with working exit behavior.
+FIXED: Smart Patron system with working exit behavior and personality types.
 """
 
 import math
@@ -12,8 +12,8 @@ from config import COLOR_ROAMING, COLOR_EXITING
 class Patron:
     """Represents a visitor with intelligent ride-seeking behavior."""
     
-    def __init__(self, patron_id, x, y, name=None):
-        """Initialize a patron."""
+    def __init__(self, patron_id, x, y, name=None, personality="balanced"):
+        """Initialize a patron with personality-based behavior."""
         self.id = patron_id
         self.name = name if name else f"Patron_{patron_id}"
         self.x = x
@@ -21,12 +21,27 @@ class Patron:
         self.state = PatronState.ROAMING
         self.target_ride = None
         self.immobile_timer = DEFAULT_PATRON_IMMOBILE_TIME
-        self.move_speed = DEFAULT_PATRON_MOVE_SPEED + random.uniform(-0.1, 0.15)
+        
+        # Personality system - NEW!
+        self.personality = personality
+        
+        # Set attributes based on personality
+        if personality == "thrill_seeker":
+            self.desired_rides = random.randint(4, 6)  # Wants more rides
+            self.move_speed = DEFAULT_PATRON_MOVE_SPEED * 1.3  # Faster movement
+            self.patience = random.randint(15, 25)  # More patient in queues
+        elif personality == "casual":
+            self.desired_rides = random.randint(1, 3)  # Fewer rides
+            self.move_speed = DEFAULT_PATRON_MOVE_SPEED * 0.8  # Slower movement
+            self.patience = random.randint(3, 8)  # Less patient
+        else:  # balanced
+            self.desired_rides = random.randint(2, 4)
+            self.move_speed = DEFAULT_PATRON_MOVE_SPEED + random.uniform(-0.1, 0.15)
+            self.patience = random.randint(5, 15)
         
         # Smart visiting system
         self.visited_rides = set()  # Track which rides visited
         self.rides_completed = 0  # Counter for completed rides
-        self.desired_rides = random.randint(2, 4)  # Want to visit 2-4 rides
         self.current_target = None  # Specific ride heading to
         
         # Path visualization
@@ -39,8 +54,7 @@ class Patron:
         self.time_riding = 0
         self.time_roaming = 0
         
-        # Personality
-        self.patience = random.randint(5, 15)
+        # Additional personality trait
         self.adventure_level = random.random()
         
     def step_change(self, park):
@@ -77,8 +91,15 @@ class Patron:
         """Smart roaming that visits all rides."""
         # FIXED: Check if completed enough rides and ready to exit
         if self.rides_completed >= self.desired_rides:
-            # Higher exit chance after completing desired rides
-            if random.random() < 0.08:  # 8% chance per step
+            # Exit chance varies by personality
+            if self.personality == "thrill_seeker":
+                exit_chance = 0.05  # Less likely to leave early
+            elif self.personality == "casual":
+                exit_chance = 0.12  # More likely to leave
+            else:
+                exit_chance = 0.08  # Balanced
+            
+            if random.random() < exit_chance:
                 self.state = PatronState.EXITING
                 self.current_target = None
                 return
@@ -104,7 +125,14 @@ class Patron:
             # If close enough, try to join queue
             if distance < 15:
                 queue_size = len(self.current_target.queue)
-                max_acceptable_queue = self.current_target.capacity * 2
+                
+                # Queue tolerance varies by personality
+                if self.personality == "thrill_seeker":
+                    max_acceptable_queue = self.current_target.capacity * 3
+                elif self.personality == "casual":
+                    max_acceptable_queue = self.current_target.capacity * 1.5
+                else:
+                    max_acceptable_queue = self.current_target.capacity * 2
                 
                 # More likely to join if haven't visited this ride
                 join_chance = 0.5 if self.current_target not in self.visited_rides else 0.3
@@ -167,7 +195,7 @@ class Patron:
         
         # Debug output
         if self.rides_completed == 1:
-            print(f"  👤 Patron {self.id} completed first ride! ({self.rides_completed}/{self.desired_rides})")
+            print(f"  👤 Patron {self.id} ({self.personality}) completed first ride! ({self.rides_completed}/{self.desired_rides})")
     
     def move_to_exit(self, park):
         """Move patron toward nearest exit."""
@@ -181,7 +209,7 @@ class Patron:
             
             if distance < 2:
                 # Debug output
-                print(f"  👋 Patron {self.id} exiting after {self.rides_completed} rides!")
+                print(f"  👋 Patron {self.id} ({self.personality}) exiting after {self.rides_completed} rides!")
                 park.remove_patron(self)
             else:
                 self.x += self.move_speed * dx / distance

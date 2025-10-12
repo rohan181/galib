@@ -495,3 +495,75 @@ class SpiderRide(Ride):
         ax.text(self.x, box[3] + 1.5, status, ha='center', fontsize=10,
                bbox=dict(boxstyle='round,pad=0.4', facecolor='white', 
                         edgecolor='red', linewidth=2, alpha=0.95), zorder=100)
+        
+
+
+
+class RollerCoaster(Ride):
+    """Roller coaster with train movement along track"""
+    
+    def __init__(self, name, x, y, capacity=8, duration=15):
+        super().__init__(name, x, y, width=18, height=8, 
+                         capacity=capacity, duration=duration)
+        self.train_position = 0.0
+        self.speed = 0.15
+        
+    def update_movement(self):
+        """Train moves along track"""
+        if self.state == RideState.RUNNING:
+            self.train_position += self.speed
+            if self.train_position >= 1.0:
+                self.train_position = 0.0
+    
+    def plot(self, ax):
+        """Plot roller coaster with track and moving train"""
+        box = self.get_bounding_box()
+        
+        # Draw track (wavy line)
+        import numpy as np
+        track_x = np.linspace(box[0], box[2], 100)
+        track_y = self.y + 3*np.sin(3*np.pi*(track_x-box[0])/(box[2]-box[0]))
+        ax.plot(track_x, track_y, color='gray', linewidth=5, zorder=2)
+        
+        # Support pillars
+        for i in range(4):
+            pillar_x = box[0] + i * (box[2]-box[0])/3
+            ax.plot([pillar_x, pillar_x], [box[1], self.y-4], 
+                   color='#654321', linewidth=4, zorder=1)
+        
+        # Moving train
+        train_x = box[0] + self.train_position * (box[2]-box[0])
+        train_y = self.y + 3*np.sin(3*np.pi*self.train_position)
+        
+        # Draw 3 train cars
+        for i in range(3):
+            car_offset = i * 2
+            car_x = train_x - car_offset
+            car_y = train_y
+            
+            car_color = 'blue' if self.state == RideState.RUNNING else 'lightblue'
+            car = patches.Rectangle((car_x-1, car_y-0.8), 2, 1.6,
+                                    facecolor=car_color, edgecolor='navy',
+                                    linewidth=2, zorder=5)
+            ax.add_patch(car)
+        
+        # State glow
+        glow = Circle((self.x, self.y), self.width/2,
+                     facecolor=self.get_state_color(), alpha=0.3, zorder=1)
+        ax.add_patch(glow)
+        
+        # Title below ride
+        title_y = box[1] - 2.5
+        title_box = FancyBboxPatch((self.x - 5.5, title_y - 0.6), 11, 1.2,
+                                  boxstyle="round,pad=0.3",
+                                  facecolor='lightcyan', edgecolor='blue',
+                                  linewidth=2.5, alpha=0.95, zorder=100)
+        ax.add_patch(title_box)
+        ax.text(self.x, title_y, self.name, ha='center', va='center',
+               fontsize=12, weight='bold', color='navy', zorder=101)
+        
+        # Status above ride
+        status = f'Queue: {len(self.queue)} | Riding: {len(self.riders)}/{self.capacity}'
+        ax.text(self.x, box[3] + 1.5, status, ha='center', fontsize=10,
+               bbox=dict(boxstyle='round,pad=0.4', facecolor='white',
+                        edgecolor='blue', linewidth=2, alpha=0.95), zorder=100)
